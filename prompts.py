@@ -343,15 +343,53 @@ import re
 
 def detectar_siglas(texto: str) -> list[str]:
     """
-    Detecta possíveis siglas no texto (palavras em maiúsculas com 2-6 letras).
+    Detecta possíveis siglas no texto (palavras de 2-6 letras que parecem siglas).
+    Detecta tanto maiúsculas (RH, TI) quanto minúsculas (rh, pngi).
     """
-    # Padrão: palavras de 2-6 letras todas em maiúscula
-    padrao = r'\b[A-Z]{2,6}\b'
-    siglas = re.findall(padrao, texto)
+    # Padrão: palavras de 2-6 letras (maiúsculas ou minúsculas isoladas)
+    # Detecta: RH, PNGI, pngi, mgi, etc.
+    padrao_maiusculas = r'\b[A-Z]{2,6}\b'
+    padrao_minusculas = r'\b[a-z]{2,6}\b'
 
-    # Remove duplicatas e palavras comuns que não são siglas
-    palavras_comuns = {'EU', 'ELE', 'ELA', 'NOS', 'VOU', 'QUE', 'COM', 'SEM', 'POR', 'PARA'}
-    siglas_unicas = list(set(siglas) - palavras_comuns)
+    siglas_maiusculas = re.findall(padrao_maiusculas, texto)
+
+    # Para minúsculas, só considera se parecer sigla (não é palavra comum)
+    palavras_minusculas = re.findall(padrao_minusculas, texto)
+
+    # Palavras comuns em português que NÃO são siglas
+    palavras_comuns = {
+        'eu', 'tu', 'ele', 'ela', 'nos', 'vos', 'eles', 'elas',
+        'de', 'da', 'do', 'das', 'dos', 'em', 'na', 'no', 'nas', 'nos',
+        'um', 'uma', 'uns', 'umas', 'o', 'a', 'os', 'as',
+        'que', 'com', 'sem', 'por', 'para', 'pra', 'pro',
+        'se', 'ou', 'e', 'mas', 'mais', 'menos',
+        'ser', 'ter', 'estar', 'fazer', 'ir', 'ver', 'dar', 'saber',
+        'pode', 'quer', 'deve', 'vai', 'vou', 'tem', 'faz',
+        'esse', 'essa', 'este', 'esta', 'isso', 'isto', 'aqui', 'ali',
+        'muito', 'pouco', 'bem', 'mal', 'sim', 'nao', 'ja', 'ainda',
+        'como', 'quando', 'onde', 'qual', 'quem',
+        'sobre', 'entre', 'ate', 'desde', 'apos', 'ante',
+        'todo', 'toda', 'todos', 'todas', 'cada', 'outro', 'outra',
+        'mesmo', 'mesma', 'proprio', 'propria',
+        'dia', 'mes', 'ano', 'hora', 'vez', 'forma', 'modo', 'tipo',
+        'email', 'whatsapp', 'reuniao', 'aviso', 'texto', 'mensagem',
+        'preciso', 'mandar', 'enviar', 'fazer', 'criar', 'escrever',
+        'secretaria', 'municipio', 'cidade', 'estado', 'pais',
+        'claros', 'montes', 'conhece', 'programa', 'nacional', 'gestao', 'integrada'
+    }
+
+    # Filtra palavras minúsculas que parecem siglas (não estão na lista comum)
+    siglas_minusculas_filtradas = [
+        p.upper() for p in palavras_minusculas
+        if p.lower() not in palavras_comuns and len(p) >= 2
+    ]
+
+    # Combina e remove duplicatas
+    todas_siglas = set(siglas_maiusculas) | set(siglas_minusculas_filtradas)
+
+    # Remove palavras comuns em maiúscula também
+    palavras_comuns_upper = {p.upper() for p in palavras_comuns}
+    siglas_unicas = list(todas_siglas - palavras_comuns_upper)
 
     return siglas_unicas
 
