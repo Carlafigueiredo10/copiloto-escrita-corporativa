@@ -343,55 +343,75 @@ import re
 
 def detectar_siglas(texto: str) -> list[str]:
     """
-    Detecta possíveis siglas no texto (palavras de 2-6 letras que parecem siglas).
-    Detecta tanto maiúsculas (RH, TI) quanto minúsculas (rh, pngi).
+    Detecta siglas no texto considerando:
+    - Sequências de 2 a 15 caracteres predominantemente em maiúsculas
+    - Pode conter números (ISO9001, G20)
+    - Pode conter barras (DECIPEX/SGP) ou hífens (COVID-19)
+    - Inclui siglas com minúsculas intercaladas (CNPq, UnB, eSocial, CadÚnico)
+    - Inclui plurais de siglas (ONGs, CPFs)
+
+    Exemplos detectados:
+    - Clássicas: RH, TI, PNGI, CEO, MGI
+    - Com números: ISO9001, G20, MP3, 5G
+    - Com barras: DECIPEX/SGP, MEC/INEP
+    - Com hífens: COVID-19, SARS-CoV-2
+    - Minúsculas intercaladas: CNPq, UnB, eSocial, CadÚnico, iPhone
+    - Plurais: ONGs, CPFs, PDFs
     """
-    # Padrão: palavras de 2-6 letras (maiúsculas ou minúsculas isoladas)
-    # Detecta: RH, PNGI, pngi, mgi, etc.
-    padrao_maiusculas = r'\b[A-Z]{2,6}\b'
-    padrao_minusculas = r'\b[a-z]{2,6}\b'
 
-    siglas_maiusculas = re.findall(padrao_maiusculas, texto)
+    siglas_encontradas = []
 
-    # Para minúsculas, só considera se parecer sigla (não é palavra comum)
-    palavras_minusculas = re.findall(padrao_minusculas, texto)
+    # Padrão 1: Siglas clássicas em MAIÚSCULAS (2-10 letras, pode ter 's' no final)
+    # Ex: RH, PNGI, CEO, ONGs, CPFs
+    padrao_classico = r'\b[A-Z]{2,10}s?\b'
+    siglas_encontradas.extend(re.findall(padrao_classico, texto))
 
-    # Palavras comuns em português que NÃO são siglas
-    palavras_comuns = {
-        'eu', 'tu', 'ele', 'ela', 'nos', 'vos', 'eles', 'elas',
-        'de', 'da', 'do', 'das', 'dos', 'em', 'na', 'no', 'nas', 'nos',
-        'um', 'uma', 'uns', 'umas', 'o', 'a', 'os', 'as',
-        'que', 'com', 'sem', 'por', 'para', 'pra', 'pro',
-        'se', 'ou', 'e', 'mas', 'mais', 'menos',
-        'ser', 'ter', 'estar', 'fazer', 'ir', 'ver', 'dar', 'saber',
-        'pode', 'quer', 'deve', 'vai', 'vou', 'tem', 'faz',
-        'esse', 'essa', 'este', 'esta', 'isso', 'isto', 'aqui', 'ali',
-        'muito', 'pouco', 'bem', 'mal', 'sim', 'nao', 'ja', 'ainda',
-        'como', 'quando', 'onde', 'qual', 'quem',
-        'sobre', 'entre', 'ate', 'desde', 'apos', 'ante',
-        'todo', 'toda', 'todos', 'todas', 'cada', 'outro', 'outra',
-        'mesmo', 'mesma', 'proprio', 'propria',
-        'dia', 'mes', 'ano', 'hora', 'vez', 'forma', 'modo', 'tipo',
-        'email', 'whatsapp', 'reuniao', 'aviso', 'texto', 'mensagem',
-        'preciso', 'mandar', 'enviar', 'fazer', 'criar', 'escrever',
-        'secretaria', 'municipio', 'cidade', 'estado', 'pais',
-        'claros', 'montes', 'conhece', 'programa', 'nacional', 'gestao', 'integrada'
+    # Padrão 2: Siglas com números
+    # Ex: ISO9001, G20, MP3, 5G, COVID19
+    padrao_com_numeros = r'\b[A-Z]+[0-9]+[A-Z0-9]*\b|\b[0-9]+[A-Z]+[A-Z0-9]*\b'
+    siglas_encontradas.extend(re.findall(padrao_com_numeros, texto))
+
+    # Padrão 3: Siglas com hífen
+    # Ex: COVID-19, SARS-CoV-2, e-Social
+    padrao_com_hifen = r'\b[A-Za-z]+-[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*\b'
+    matches_hifen = re.findall(padrao_com_hifen, texto)
+    # Filtra apenas os que têm maiúsculas significativas
+    for m in matches_hifen:
+        if sum(1 for c in m if c.isupper()) >= 1:
+            siglas_encontradas.append(m)
+
+    # Padrão 4: Siglas com barra
+    # Ex: DECIPEX/SGP, MEC/INEP
+    padrao_com_barra = r'\b[A-Z]+/[A-Z]+(?:/[A-Z]+)*\b'
+    siglas_encontradas.extend(re.findall(padrao_com_barra, texto))
+
+    # Padrão 5: Siglas com minúsculas intercaladas (estilo CamelCase especial)
+    # Ex: CNPq, UnB, CadÚnico, eSocial, iPhone
+    padrao_intercalado = r'\b[a-z]?[A-Z][a-z]*[A-Z][A-Za-z]*\b|\b[A-Z][a-z]+[A-Z][A-Za-z]*\b'
+    matches_intercalado = re.findall(padrao_intercalado, texto)
+    # Filtra para pegar apenas os que parecem siglas (não nomes próprios comuns)
+    for m in matches_intercalado:
+        # Deve ter pelo menos 2 maiúsculas ou ser padrão conhecido
+        qtd_maiusculas = sum(1 for c in m if c.isupper())
+        if qtd_maiusculas >= 2 or m[0].islower():
+            siglas_encontradas.append(m)
+
+    # Remove duplicatas e ordena
+    siglas_unicas = list(set(siglas_encontradas))
+
+    # Filtra palavras que claramente não são siglas
+    palavras_ignorar = {
+        'EU', 'EUA',  # Mantém EUA como sigla válida
+        'DE', 'DA', 'DO', 'DAS', 'DOS',
+        'EM', 'NA', 'NO', 'NAS', 'NOS',
+        'UM', 'UMA', 'UNS', 'UMAS',
+        'QUE', 'COM', 'SEM', 'POR', 'PARA',
+        'SE', 'OU', 'MAS', 'MAIS', 'MENOS',
     }
 
-    # Filtra palavras minúsculas que parecem siglas (não estão na lista comum)
-    siglas_minusculas_filtradas = [
-        p.upper() for p in palavras_minusculas
-        if p.lower() not in palavras_comuns and len(p) >= 2
-    ]
+    siglas_filtradas = [s for s in siglas_unicas if s.upper() not in palavras_ignorar]
 
-    # Combina e remove duplicatas
-    todas_siglas = set(siglas_maiusculas) | set(siglas_minusculas_filtradas)
-
-    # Remove palavras comuns em maiúscula também
-    palavras_comuns_upper = {p.upper() for p in palavras_comuns}
-    siglas_unicas = list(todas_siglas - palavras_comuns_upper)
-
-    return siglas_unicas
+    return siglas_filtradas
 
 # =============================================================================
 # FUNÇÃO PARA MONTAR O PROMPT COMPLETO
